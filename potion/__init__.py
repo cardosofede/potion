@@ -1,1 +1,1 @@
-from .client import Notion
+from .client import NotionService
