@@ -3,6 +3,7 @@ import ujson
 from typing import Optional
 import logging
 import time
+from .notion_database import NotionDatabase
 
 
 class NotionService:
@@ -173,7 +174,28 @@ class NotionService:
             logging.error('Max retries reached and connection is not available')
         return database
 
-    def query_database(self, database_id: str, filter: Optional[dict] = None, sorts: Optional[dict] = None, start_cursor: Optional[str] = None, page_size: Optional[int] = 100, max_retries: Optional[int] = 2):
+    def query_database(self, database_id: str, filter: Optional[dict] = None, sorts: Optional[dict] = None,
+                       start_cursor: Optional[str] = None, page_size: Optional[int] = 100,
+                       max_retries: Optional[int] = 2):
+        """
+        Gets a list of Pages contained in the database, filtered and ordered according to the filter
+        conditions and sort criteria provided in the request.
+
+        Parameters
+        ----------
+        database_id  : Identifier for a Notion database.
+        filter       : When supplied, limits which pages are returned based on the filter conditions.
+        sorts        : When supplied, orders the results based on the provided sort criteria.
+        start_cursor : When supplied, returns a page of results starting after the cursor provided.
+                       If not supplied, this endpoint will return the first page of results.
+        page_size    : The number of items from the full list desired in the response. Maximum: 100
+        max_retries  : If there is an error of connection, how many times to retry.
+
+        Returns
+        -------
+        A view of the Database filtered and sorted
+
+        """
         endpoint = f'databases/{database_id}/query'
         params = [('filter', filter), ('sorts', sorts), ('start_cursor', start_cursor), ('page_size', page_size)]
         params_dict = {p[0]: p[1] for p in params if p[1] is not None}
@@ -185,5 +207,19 @@ class NotionService:
                 break
         if query is None:
             logging.error('Max retries reached and connection is not available')
-        return query
+        return NotionDatabase(query)
 
+    def create_page(self, parent: dict, properties: dict, children: Optional[list] = None,
+                    max_retries: Optional[int] = 2):
+        endpoint = 'pages'
+        params = [('parent', parent), ('properties', properties), ('children', children)]
+        params_dict = {p[0]: p[1] for p in params if p[1] is not None}
+        payload = ujson.dumps(params_dict)
+        for i in range(max_retries):
+            response = requests.request('POST', self._base_url + endpoint, headers=self._headers, data=payload)
+            page = self.handle_response_status_code(response)
+            if page is not None:
+                break
+        if page is None:
+            logging.error('Max retries reached and connection is not available')
+        return page
